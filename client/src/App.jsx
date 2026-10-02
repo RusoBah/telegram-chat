@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import intlTelInput from 'intl-tel-input';
 import 'intl-tel-input/styles';
+import './App.css';
 
 const stateLabels = {
   authorized: 'Инстанс подключён и авторизован',
@@ -23,9 +24,19 @@ function App() {
 
   /** Показывает, выполняется ли проверка подключения. */
   const [isLoading, setIsLoading] = useState(false);
+  const [showToken, setShowToken] = useState(false);
 
   /** Разрешает показать поиск получателя после авторизации инстанса. */
   const [isConnected, setIsConnected] = useState(false);
+
+  /** Текст нового сообщения. */
+  const [messageText, setMessageText] = useState('');
+
+  /** Результат попытки отправки. */
+  const [sendStatus, setSendStatus] = useState('');
+
+  /** Блокирует повторное нажатие во время запроса. */
+  const [isSending, setIsSending] = useState(false);
 
   /** Номер получателя, введённый пользователем. */
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -159,80 +170,162 @@ function App() {
     }
   }
 
+  /**
+  * Отправляет текст найденному получателю.
+  */
+  const sendMessage = async (event) => {
+    event.preventDefault();
+    setIsSending(true);
+    setSendStatus('Передаём сообщение...');
+
+    try {
+      const response = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          chatId,
+          message: messageText,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Ошибка отправки');
+      }
+
+      setSendStatus(`Сообщение поставлено в очередь. ID: ${data.idMessage}`);
+      setMessageText('');
+    } catch (error) {
+      setSendStatus(error.message);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
-    <main>
-      <h1>Telegram Chat</h1>
+    <main className="page">
+      <div className="app-card">
+        <header className="card-header">
+          <span className="eyebrow">Telegram Chat</span>
+          <h1>Подключите ваш чат</h1>
+          <p>Укажите данные инстанса, чтобы начать переписку.</p>
+        </header>
 
-      
-      <form onSubmit={checkConnection}>
-        <label>
-          API URL
-          <input
-            type="url"
-            name="apiUrl"
-            placeholder="https://4100.api.green-api.com"
-            value={form.apiUrl}
-            onChange={updateField}
-            required
-          />
-        </label>
-        <label>
-          ID инстанса
-          <input
-            name="idInstance"
-            value={form.idInstance}
-            onChange={updateField}
-            required
-          />
-        </label>
-
-        <label>
-          Токен инстанса
-          <input
-            name="apiTokenInstance"
-            type="password"
-            value={form.apiTokenInstance}
-            onChange={updateField}
-            required
-          />
-        </label>
-
-        <button type="submit" disabled={isLoading}>
-          {isLoading ? 'Проверяем...' : 'Проверить подключение'}
-        </button>
-      </form>
-
-      <p role="status">
-        {status}
-      </p>
-
-      {/** Доступен поиск после авторизации  */}
-      {isConnected && (
-        <section>
-          <h2>Найти получателя</h2>
-
-          <form onSubmit={findRecipient}>
-            <label>
-              Телефон в международном формате
+        <form className="app-form" onSubmit={checkConnection}>
+          <div className="field">
+            <label htmlFor="api-url">API URL</label>
+            <input
+              id="api-url"
+              type="url"
+              name="apiUrl"
+              placeholder="https://4100.api.green-api.com"
+              value={form.apiUrl}
+              onChange={updateField}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="instance-id">ID инстанса</label>
+            <input
+              id="instance-id"
+              name="idInstance"
+              placeholder="Введите ID инстанса"
+              value={form.idInstance}
+              onChange={updateField}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="instance-token">Токен инстанса</label>
+            <div className="input-with-action">
               <input
-                ref={phoneInputRef}
-                type="tel"
-                id="phone"
-                autoComplete="tel"
-                placeholder="+1 702 123 4567"
-                value={phoneNumber}
-                onChange={(event) => setPhoneNumber(event.target.value)}
+                id="instance-token"
+                name="apiTokenInstance"
+                type={showToken ? 'text' : 'password'}
+                placeholder="Введите токен инстанса"
+                value={form.apiTokenInstance}
+                onChange={updateField}
                 required
               />
-            </label>
+              <button
+                className="input-action"
+                type="button"
+                onClick={() => setShowToken((current) => !current)}
+                aria-label={showToken ? 'Скрыть токен' : 'Показать токен'}
+                aria-pressed={showToken}
+              >
+                {showToken ? 'Скрыть' : 'Показать'}
+              </button>
+            </div>
+          </div>
+          <button className="primary-button" type="submit" disabled={isLoading}>
+            {isLoading ? 'Проверяем...' : 'Проверить подключение'}
+          </button>
+        </form>
 
-            <button type="submit">Найти</button>
-          </form>
+        {status && <p className="feedback" role="status">{status}</p>}
 
-          <p role="status">{recipientStatus}</p>
-          {chatId && <p>Идентификатор чата: {chatId}</p>}
-        </section>
-      )}
+        {isConnected && (
+          <section className="next-section" aria-labelledby="recipient-title">
+            <div className="section-heading">
+              <span className="step-number">02</span>
+              <div>
+                <h2 id="recipient-title">Найти получателя</h2>
+                <p>Введите номер в международном формате.</p>
+              </div>
+            </div>
+            <form className="app-form" onSubmit={findRecipient}>
+              <div className="field">
+                <label htmlFor="phone">Номер телефона</label>
+                <input
+                  ref={phoneInputRef}
+                  type="tel"
+                  id="phone"
+                  autoComplete="tel"
+                  placeholder="+1 702 123 4567"
+                  value={phoneNumber}
+                  onChange={(event) => setPhoneNumber(event.target.value)}
+                  required
+                />
+              </div>
+              <button className="primary-button" type="submit">Найти получателя</button>
+            </form>
+            {recipientStatus && <p className="feedback" role="status">{recipientStatus}</p>}
+            {chatId && <p className="chat-id">Идентификатор чата: {chatId}</p>}
+          </section>
+        )}
+
+        {chatId && (
+          <section className="next-section" aria-labelledby="message-title">
+            <div className="section-heading">
+              <span className="step-number">03</span>
+              <div>
+                <h2 id="message-title">Новое сообщение</h2>
+                <p>Напишите текст для найденного получателя.</p>
+              </div>
+            </div>
+            <form className="app-form" onSubmit={sendMessage}>
+              <div className="field">
+                <label htmlFor="message">Сообщение</label>
+                <textarea
+                  id="message"
+                  placeholder="Введите сообщение..."
+                  value={messageText}
+                  onChange={(event) => setMessageText(event.target.value)}
+                  maxLength={4096}
+                  required
+                />
+              </div>
+              <button className="primary-button" type="submit" disabled={isSending}>
+                {isSending ? 'Отправляем...' : 'Отправить сообщение'}
+              </button>
+            </form>
+            {sendStatus && <p className="feedback" role="status">{sendStatus}</p>}
+          </section>
+        )}
+      </div>
     </main>
   );
 }
