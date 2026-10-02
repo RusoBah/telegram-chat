@@ -1,31 +1,108 @@
 import { useState } from 'react';
 
+const stateLabels = {
+  authorized: 'Инстанс подключён и авторизован',
+  notAuthorized: 'Инстанс не авторизован',
+  starting: 'Инстанс запускается',
+  pendingPassword: 'Требуется пароль двухфакторной аутентификации',
+  suspended: 'Для аккаунта действуют временные ограничения',
+  blocked: 'Аккаунт заблокирован',
+};
 
 function App() {
-  const [status, setStatus] = useState('Проверка ещё не запускалась');
+  const [form, setForm] = useState({
+    apiUrl: '',
+    idInstance: '',
+    apiTokenInstance: '',
+  });
+  const [status, setStatus] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  async function checkServer() {
-    setStatus('Проверка..');
+  const updateField = (event) => {
+    const {name, value} = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]:value,
+    }));
+  } 
+
+
+  const checkConnection = async (event) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setStatus('Проверяем подключение...');
 
     try {
-      const response = await fetch('/api/health');
-
-      if (!response.ok) {
-        throw new Error(`Ошибка HTTP: ${response.status}`);
-      }
+      const response = await fetch('/api/connection/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
 
       const data = await response.json();
-      setStatus(data.ok ? 'Сервер гуд' : 'Нежданчик');
-    } catch {
-      setStatus(`Не удалось подключиться: ${error.message}`);
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Ошибка проверки');
+      }
+
+      setStatus(
+        stateLabels[data.stateInstance] ??
+          `Состояние инстанса: ${data.stateInstance}`,
+      );
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setIsLoading(false);
     }
   }
+  
  
   return (
     <main>
       <h1>Telegram Chat</h1>
-      <button onClick={checkServer}>Проверить сервер</button>
-      <p>{status}</p>
+      
+      <form onSubmit={checkConnection}>
+        <label>
+          API URL
+          <input 
+            type="url" 
+            name="apiUrl"
+            placeholder="https://4100.api.green-api.com"
+            value={form.apiUrl}
+            onChange={updateField}
+            required
+          />
+        </label>
+        <label>
+          ID инстанса
+          <input
+            name="idInstance"
+            value={form.idInstance}
+            onChange={updateField}
+            required
+          />
+        </label>
+
+        <label>
+          Токен инстанса
+          <input
+            name="apiTokenInstance"
+            type="password"
+            value={form.apiTokenInstance}
+            onChange={updateField}
+            required
+          />
+        </label>
+
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Проверяем...' : 'Проверить подключение'}
+        </button>
+      </form>
+
+      <p role="status">
+        {status}
+      </p>
     </main>
   );
 }
