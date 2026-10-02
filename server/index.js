@@ -1,43 +1,10 @@
 import express from 'express';
+import { getIncomingMessages } from './incoming-messages.js';
 
 const app = express();
 
 app.disable('x-powered-by');
 app.use(express.json());
-
-/** Входящие сообщения текущего запуска сервера: ключ инстанса -> сообщения чатов. */
-const inbox = new Map();
-
-/**
- * Сохраняет входящее текстовое сообщение без дублирования по idMessage.
- */
-function saveIncomingMessage(connection, body) {
-  if (
-    body?.typeWebhook !== 'incomingMessageReceived' ||
-    body?.messageData?.typeMessage !== 'textMessage' ||
-    typeof body.idMessage !== 'string' ||
-    typeof body.senderData?.chatId !== 'string' ||
-    typeof body.messageData?.textMessageData?.textMessage !== 'string'
-  ) {
-    return;
-  }
-
-  const instanceKey = `${connection.baseUrl}:${connection.idInstance}`;
-  const chats = inbox.get(instanceKey) ?? new Map();
-  const chatId = body.senderData.chatId;
-  const messages = chats.get(chatId) ?? [];
-
-  if (!messages.some((item) => item.id === body.idMessage)) {
-    messages.push({
-      id: body.idMessage,
-      text: body.messageData.textMessageData.textMessage,  
-      timestamp: body.timestamp,
-    });
-  }
-
-  chats.set(chatId, messages);
-  inbox.set(instanceKey, chats);
-}
 
 /**
  * Проверяет параметры подключения и возвращает данные для запросов к GREEN-API.
@@ -295,7 +262,7 @@ app.post('/api/recipient/check', async (req, res) => {
 });
 
 /**
- * Забирает до десяти уведомлений из очереди и возвращает ответы нужного чата.
+ * Читает историю выбранного чата и возвращает входящие сообщения.
  *
  * POST /api/messages/receive
  * Тело: параметры подключения и chatId.
@@ -309,49 +276,23 @@ app.post('/api/messages/receive', async (req, res) => {
   }
 
   try {
-    for (let i = 0; i < 10; i += 1) {
-      const notification = await callGreenApi(
-        connection,
-        'receiveNotification',
-      );
+    const history = await callGreenApi(connection, 'getChatHistory', {
+      chatId,
+      count: 100,
+    });
 
-      /** Пустой ответ означает, что сейчас в очереди ничего нет. */
-      if (!notification) {
-        break;
-      }
-
-      if (!Number.isInteger(notification.receiptId)) {
-        return res.status(502).json({ error: 'Некорректное уведомление' });
-      }
-
-      /** Сначала сохраняем сообщение, затем подтверждаем обработку. */
-      saveIncomingMessage(connection, notification.body);
-
-      const { baseUrl, idInstance, apiTokenInstance } = connection;
-
-      const deleteResponse = await fetch(
-        `${baseUrl}/waInstance${idInstance}/deleteNotification/${apiTokenInstance}/${notification.receiptId}`,
-        {
-          method: 'DELETE',
-          signal: AbortSignal.timeout(10000),
-        },
-      );
-
-      if (!deleteResponse.ok) {
-        throw new Error(`GREEN-API ответил HTTP ${deleteResponse.status}`);
-      }
-
-      const result = await deleteResponse.json();
-
-      if (result.result !== true) {
-        throw new Error('GREEN-API не подтвердил обработку уведомления');
-      }
+    if (!Array.isArray(history)) {
+      return res.status(502).json({ error: 'Некорректная история чата от GREEN-API' });
     }
 
-    const instanceKey = `${connection.baseUrl}:${connection.idInstance}`;
-    const messages = inbox.get(instanceKey)?.get(chatId) ?? [];
+    const messages = getIncomingMessages(history, chatId);
+    const latestTimestamp = messages.reduce(
+      (latest, message) => Math.max(latest, message.timestamp),
+      0,
+    );
+    const incomingChats = latestTimestamp ? [{ chatId, timestamp: latestTimestamp }] : [];
 
-    return res.json({ messages });
+    return res.json({ messages, incomingChats });
   } catch (error) {
     return sendApiError(res, error);
   }
