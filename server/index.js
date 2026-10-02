@@ -5,6 +5,40 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json());
 
+/** Входящие сообщения текущего запуска сервера: ключ инстанса -> сообщения чатов. */
+const inbox = new Map();
+
+/**
+ * Сохраняет входящее текстовое сообщение без дублирования по idMessage.
+ */
+function saveIncomingMessage(connection, body) {
+  if (
+    body?.typeWebhook !== 'incomingMessageReceived' ||
+    body?.messageData?.typeMessage !== 'textMessage' ||
+    typeof body.idMessage !== 'string' ||
+    typeof body.senderData?.chatId !== 'string' ||
+    typeof body.messageData?.textMessageData?.textMessage !== 'string'
+  ) {
+    return;
+  }
+
+  const instanceKey = `${connection.baseUrl}:${connection.idInstance}`;
+  const chats = inbox.get(instanceKey) ?? new Map();
+  const chatId = body.senderData.chatId;
+  const messages = chats.get(chatId) ?? [];
+
+  if (!messages.some((item) => item.id === body.idMessage)) {
+    messages.push({
+      id: body.idMessage,
+      text: body.messageData.textMessageData.textMessage,  
+      timestamp: body.timestamp,
+    });
+  }
+
+  chats.set(chatId, messages);
+  inbox.set(instanceKey, chats);
+}
+
 /**
  * Проверяет параметры подключения и возвращает данные для запросов к GREEN-API.
  *
@@ -207,10 +241,10 @@ app.post('/api/recipient/check', async (req, res) => {
     return res.status(400).json({ error: 'Укажите номер телефона' });
   }
 
-   /**
-   * Убираем только символы оформления номера: +, пробелы, скобки и дефисы.
-   * Буквы и другие символы остаются и не пройдут проверку ниже.
-   */
+  /**
+  * Убираем только символы оформления номера: +, пробелы, скобки и дефисы.
+  * Буквы и другие символы остаются и не пройдут проверку ниже.
+  */
   const digits = phoneNumber.replace(/[\s()+-]/g, '');
 
   if (!/^\d{8,15}$/.test(digits)) {
@@ -233,6 +267,69 @@ app.post('/api/recipient/check', async (req, res) => {
     }
 
     return res.json({ exist: true, chatId: data.chatId });
+  } catch (error) {
+    return sendApiError(res, error);
+  }
+});
+
+/**
+ * Забирает до десяти уведомлений из очереди и возвращает ответы нужного чата.
+ *
+ * POST /api/messages/receive
+ * Тело: параметры подключения и chatId.
+ */
+app.post('/api/messages/receive', async (req, res) => {
+  const connection = parseConnection(req.body);
+  const chatId = req.body?.chatId;
+
+  if (!connection || typeof chatId !== 'string' || !/^\d+$/.test(chatId)) {
+    return res.status(400).json({ error: 'Проверьте подключение и чат' });
+  }
+
+  try {
+    for (let i = 0; i < 10; i += 1) {
+      const notification = await callGreenApi(
+        connection,
+        'receiveNotification',
+      );
+
+      /** Пустой ответ означает, что сейчас в очереди ничего нет. */
+      if (!notification) {
+        break;
+      }
+
+      if (!Number.isInteger(notification.receiptId)) {
+        return res.status(502).json({ error: 'Некорректное уведомление' });
+      }
+
+      /** Сначала сохраняем сообщение, затем подтверждаем обработку. */
+      saveIncomingMessage(connection, notification.body);
+
+      const { baseUrl, idInstance, apiTokenInstance } = connection;
+
+      const deleteResponse = await fetch(
+        `${baseUrl}/waInstance${idInstance}/deleteNotification/${apiTokenInstance}/${notification.receiptId}`,
+        {
+          method: 'DELETE',
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+
+      if (!deleteResponse.ok) {
+        throw new Error(`GREEN-API ответил HTTP ${deleteResponse.status}`);
+      }
+
+      const result = await deleteResponse.json();
+
+      if (result.result !== true) {
+        throw new Error('GREEN-API не подтвердил обработку уведомления');
+      }
+    }
+
+    const instanceKey = `${connection.baseUrl}:${connection.idInstance}`;
+    const messages = inbox.get(instanceKey)?.get(chatId) ?? [];
+
+    return res.json({ messages });
   } catch (error) {
     return sendApiError(res, error);
   }
