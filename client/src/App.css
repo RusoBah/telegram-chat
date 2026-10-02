@@ -170,6 +170,24 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.incoming-messages {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.incoming-messages li {
+  padding: 16px 18px;
+  border: 1px solid #39383e;
+  border-radius: 7px;
+  background: #29292d;
+  color: #f6f5f8;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .next-section {
   margin-top: 38px;
   padding-top: 34px;

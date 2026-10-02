@@ -20,7 +20,7 @@ function App() {
     idInstance: '',
     apiTokenInstance: '',
   });
- /** Текст результата проверки подключения. */
+  /** Текст результата проверки подключения. */
   const [status, setStatus] = useState('');
 
   /** Показывает, выполняется ли проверка подключения. */
@@ -41,6 +41,13 @@ function App() {
 
   const phoneInputRef = useRef(null);
   const phoneItiRef = useRef(null);
+
+  /** Ответы получателя, загруженные с сервера. */
+  const [incomingMessages, setIncomingMessages] = useState([]);
+
+  /** Состояние проверки ответов. */
+  const [receiveStatus, setReceiveStatus] = useState('');
+  const [isReceiving, setIsReceiving] = useState(false);
 
   useEffect(() => {
     const input = phoneInputRef.current;
@@ -91,15 +98,15 @@ function App() {
     setStatus('Проверяем подключение...');
 
     try {
-      
+
       const response = await fetch('/api/connection/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error ?? 'Ошибка проверки');
       }
@@ -118,9 +125,9 @@ function App() {
     }
   }
 
-   /**
-   * Проверяет номер получателя через сервер и сохраняет найденный chatId.
-   */
+  /**
+  * Проверяет номер получателя через сервер и сохраняет найденный chatId.
+  */
   const findRecipient = async (event) => {
     event.preventDefault();
     setChatId(null);
@@ -195,6 +202,35 @@ function App() {
       setIsSending(false);
     }
   };
+
+  /**
+   * Просит сервер обрабатывать очередь и показывать ответы чата
+   */
+  const receiveMessage = async () => {
+    setIsReceiving(true);
+    setReceiveStatus('Чекаем ответы...');
+
+    try {
+      const response = await fetch('/api/messages/receive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, chatId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Не удалось получить ответы');
+      }
+
+      setIncomingMessages(data.messages);
+      setReceiveStatus(`Получено ответов: ${data.messages.length}`);
+    } catch (error) {
+      setReceiveStatus(error.message);
+    } finally {
+      setIsReceiving(false);
+    }
+  }
 
   return (
     <main className="page">
@@ -288,9 +324,31 @@ function App() {
         )}
 
         {chatId && (
-          <section className="next-section" aria-labelledby="message-title">
+          <section className="next-section" aria-labelledby="responses-title">
             <div className="section-heading">
               <span className="step-number">03</span>
+              <div>
+                <h2 id="responses-title">Ответы получателя</h2>
+                <p>Проверьте новые сообщения в найденном чате.</p>
+              </div>
+            </div>
+            <button className="primary-button" type="button" onClick={receiveMessage} disabled={isReceiving}>
+              {isReceiving ? 'Проверяем...' : 'Проверить ответы'}
+            </button>
+            {receiveStatus && <p className="feedback" role="status">{receiveStatus}</p>}
+            {incomingMessages.length > 0 && (
+              <ul className="incoming-messages">
+                {incomingMessages.map((message) => (
+                  <li key={message.id}>{message.text}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+        {chatId && (
+          <section className="next-section" aria-labelledby="message-title">
+            <div className="section-heading">
+              <span className="step-number">04</span>
               <div>
                 <h2 id="message-title">Новое сообщение</h2>
                 <p>Напишите текст для найденного получателя.</p>
