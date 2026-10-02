@@ -49,6 +49,19 @@ function App() {
   const [receiveStatus, setReceiveStatus] = useState('');
   const [isReceiving, setIsReceiving] = useState(false);
 
+  /** Последние найденные чаты для подключённого инстанса. */
+  const [chatHistory, setChatHistory] = useState([]);
+  const [historyKey, setHistoryKey] = useState(null);
+
+  useEffect(() => {
+    if (!historyKey) return;
+    try {
+      localStorage.setItem(historyKey, JSON.stringify(chatHistory));
+    } catch {
+      // История остаётся доступной до закрытия страницы.
+    }
+  }, [chatHistory, historyKey]);
+
   useEffect(() => {
     const input = phoneInputRef.current;
     if (!input) return undefined;
@@ -86,6 +99,17 @@ function App() {
     }));
   }
 
+  const selectChat = (selectedChatId) => {
+    setChatId(selectedChatId);
+    setIncomingMessages([]);
+    setReceiveStatus('');
+    setSendStatus('');
+  };
+
+  const removeChatFromHistory = (removedChatId) => {
+    setChatHistory((current) => current.filter((chat) => chat.chatId !== removedChatId));
+  };
+
   /**
    * 
    * Отправляет параметры инстанса серверу и показывает его состояние.
@@ -95,6 +119,8 @@ function App() {
     setIsLoading(true);
     setIsConnected(false);
     setChatId(null);
+    setHistoryKey(null);
+    setChatHistory([]);
     setStatus('Проверяем подключение...');
 
     try {
@@ -112,7 +138,30 @@ function App() {
       }
 
       /** Поиск получателя доступен только авторизованному инстансу. */
-      setIsConnected(data.stateInstance === 'authorized');
+      const authorized = data.stateInstance === 'authorized';
+      setIsConnected(authorized);
+      if (authorized) {
+        const key = `telegram-chat-history:${form.apiUrl.trim()}:${form.idInstance.trim()}`;
+        let savedHistory = [];
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) ?? '[]');
+          if (Array.isArray(parsed)) {
+            savedHistory = parsed.filter(
+              (chat) => chat && typeof chat.chatId === 'string' && /^\d+$/.test(chat.chatId),
+            ).slice(0, 10).map((chat) => ({
+              chatId: chat.chatId,
+              phoneNumber: typeof chat.phoneNumber === 'string' ? chat.phoneNumber : '',
+              name: typeof chat.name === 'string' ? chat.name : '',
+              hasReply: chat.hasReply === true,
+              lastSentAt: Number.isInteger(chat.lastSentAt) ? chat.lastSentAt : null,
+            }));
+          }
+        } catch {
+          // Повреждённая запись не мешает работе формы.
+        }
+        setChatHistory(savedHistory);
+        setHistoryKey(key);
+      }
 
       setStatus(
         stateLabels[data.stateInstance] ??
@@ -131,6 +180,9 @@ function App() {
   const findRecipient = async (event) => {
     event.preventDefault();
     setChatId(null);
+    setIncomingMessages([]);
+    setReceiveStatus('');
+    setSendStatus('');
     setRecipientStatus('Ищем получателя...');
 
     try {
@@ -163,6 +215,16 @@ function App() {
       }
 
       setChatId(data.chatId);
+      setChatHistory((current) => {
+        const previous = current.find((chat) => chat.chatId === data.chatId);
+        return [{
+          chatId: data.chatId,
+          phoneNumber: data.phoneNumber || previous?.phoneNumber || internationalNumber,
+          name: data.name || previous?.name || '',
+          hasReply: previous?.hasReply ?? false,
+          lastSentAt: previous?.lastSentAt ?? null,
+        }, ...current.filter((chat) => chat.chatId !== data.chatId)].slice(0, 10);
+      });
       setRecipientStatus('Получатель найден');
     } catch (error) {
       setRecipientStatus(error.message);
@@ -176,6 +238,7 @@ function App() {
     event.preventDefault();
     setIsSending(true);
     setSendStatus('Передаём сообщение...');
+    const sentAt = Math.floor(Date.now() / 1000);
 
     try {
       const response = await fetch('/api/messages/send', {
@@ -196,6 +259,11 @@ function App() {
 
       setSendStatus(`Сообщение поставлено в очередь. ID: ${data.idMessage}`);
       setMessageText('');
+      setChatHistory((current) => current.map((chat) => chat.chatId === chatId ? {
+        ...chat,
+        lastSentAt: sentAt,
+        hasReply: false,
+      } : chat));
     } catch (error) {
       setSendStatus(error.message);
     } finally {
@@ -208,7 +276,7 @@ function App() {
    */
   const receiveMessage = async () => {
     setIsReceiving(true);
-    setReceiveStatus('Чекаем ответы...');
+    setReceiveStatus('Проверяем ответы...');
 
     try {
       const response = await fetch('/api/messages/receive', {
@@ -224,7 +292,15 @@ function App() {
       }
 
       setIncomingMessages(data.messages);
-      setReceiveStatus(`Получено ответов: ${data.messages.length}`);
+      const latestByChat = new Map((data.incomingChats ?? []).map(
+        (chat) => [chat.chatId, chat.timestamp],
+      ));
+      setChatHistory((current) => current.map((chat) => ({
+        ...chat,
+        hasReply: chat.hasReply || (chat.lastSentAt !== null
+          && (latestByChat.get(chat.chatId) ?? 0) >= chat.lastSentAt),
+      })));
+      setReceiveStatus(`Входящих сообщений в истории: ${data.messages.length}`);
     } catch (error) {
       setReceiveStatus(error.message);
     } finally {
@@ -234,6 +310,7 @@ function App() {
 
   return (
     <main className="page">
+      <div className="workspace-layout">
       <div className="app-card">
         <header className="card-header">
           <span className="eyebrow">Telegram Chat</span>
@@ -373,6 +450,45 @@ function App() {
             {sendStatus && <p className="feedback" role="status">{sendStatus}</p>}
           </section>
         )}
+      </div>
+      <aside className="history-card" aria-labelledby="history-title">
+        <span className="eyebrow">История</span>
+        <h2 id="history-title">Последние чаты</h2>
+        <p className="history-description">До 10 найденных чатов этого инстанса. Статус обновляется после проверки ответов.</p>
+        {chatHistory.length > 0 ? (
+          <ul className="history-list">
+            {chatHistory.map((chat) => (
+              <li className="history-row" key={chat.chatId}>
+                <button
+                  className="history-item"
+                  type="button"
+                  onClick={() => selectChat(chat.chatId)}
+                  aria-pressed={chatId === chat.chatId}
+                >
+                  <span className="history-name">{chat.name || 'Имя недоступно'}</span>
+                  <span className="history-detail">ID: {chat.chatId}</span>
+                  <span className="history-detail">Номер: {chat.phoneNumber ? `+${chat.phoneNumber.replace(/^\+/, '')}` : 'скрыт'}</span>
+                  <span className={chat.hasReply ? 'reply-status reply-status--received' : 'reply-status'}>
+                    {chat.hasReply ? 'Ответ получен' : chat.lastSentAt ? 'Ожидаем ответ' : 'Сообщение не отправлялось'}
+                  </span>
+                </button>
+                <button
+                  className="history-remove"
+                  type="button"
+                  onClick={() => removeChatFromHistory(chat.chatId)}
+                  aria-label={`Убрать чат ${chat.name || chat.chatId} из истории`}
+                >
+                  Убрать
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="history-empty">
+            {isConnected ? 'Найдите получателя, чтобы добавить его в историю.' : 'Подключите инстанс, чтобы увидеть историю.'}
+          </p>
+        )}
+      </aside>
       </div>
     </main>
   );
