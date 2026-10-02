@@ -266,7 +266,29 @@ app.post('/api/recipient/check', async (req, res) => {
       return res.status(502).json({ error: 'Неожиданный ответ GREEN-API' });
     }
 
-    return res.json({ exist: true, chatId: data.chatId });
+    let name = '';
+    let resolvedPhoneNumber = digits;
+
+    try {
+      const contact = await callGreenApi(connection, 'getContactInfo', {
+        chatId: data.chatId,
+      });
+      name = [contact.name, contact.contactName].find(
+        (value) => typeof value === 'string' && value.trim(),
+      )?.trim() ?? '';
+      if (typeof contact.phoneNumber === 'number' && contact.phoneNumber > 0) {
+        resolvedPhoneNumber = String(contact.phoneNumber);
+      }
+    } catch {
+      // Поиск получателя остаётся успешным, даже если имя недоступно.
+    }
+
+    return res.json({
+      exist: true,
+      chatId: data.chatId,
+      phoneNumber: resolvedPhoneNumber,
+      name,
+    });
   } catch (error) {
     return sendApiError(res, error);
   }
