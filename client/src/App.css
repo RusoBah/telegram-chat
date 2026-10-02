@@ -202,27 +202,39 @@ h2 {
   line-height: 1.3;
 }
 
+:root {
+  --iti-hover-color: #4e3c67;
+  --iti-border-color: #44404d;
+  --iti-country-selector-bg: #29292d;
+  --iti-icon-color: #c7bbd5;
+}
+
 .iti {
   display: block;
   width: 100%;
-}
-
-.iti .iti__tel-input {
-  padding-left: 96px;
 }
 
 .iti__country-container {
   color: #f5f3f8;
 }
 
-.iti__dropdown-content {
+.iti__country-selector {
   background: #29292d;
-  border-color: #44404d;
+  color: #f5f3f8;
+  box-shadow: 0 12px 24px rgb(0 0 0 / 26%);
+}
+
+.iti__dial-code {
+  color: #bbb2c8;
+}
+
+.iti__search-input {
+  background: #29292d;
   color: #f5f3f8;
 }
 
-.iti__country.iti__highlight {
-  background: #4e3c67;
+.iti__search-input::placeholder {
+  color: #aaa7b3;
 }
 
 @media (max-width: 600px) {

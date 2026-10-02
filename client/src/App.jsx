@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import intlTelInput from 'intl-tel-input';
+import ru from 'intl-tel-input/locale/ru';
 import 'intl-tel-input/styles';
 import './App.css';
 
@@ -38,8 +39,6 @@ function App() {
   /** Блокирует повторное нажатие во время запроса. */
   const [isSending, setIsSending] = useState(false);
 
-  /** Номер получателя, введённый пользователем. */
-  const [phoneNumber, setPhoneNumber] = useState('');
   const phoneInputRef = useRef(null);
   const phoneItiRef = useRef(null);
 
@@ -47,17 +46,10 @@ function App() {
     const input = phoneInputRef.current;
     if (!input) return undefined;
 
-    const initialCountryLookup = async () => {
-      const response = await fetch('https://ipapi.co/json');
-      if (!response.ok) throw new Error('Не удалось определить страну по IP');
-      const data = await response.json();
-      return data.country_code;
-    };
-
     const iti = intlTelInput(input, {
-      initialCountryLookup,
-      countrySearch: false,
-      matchDropdownWidth: false,
+      initialCountry: 'ru',
+      countryNameLocale: 'ru',
+      uiTranslations: ru,
       loadUtils: () => import('intl-tel-input/utils'),
     });
     phoneItiRef.current = iti;
@@ -136,7 +128,7 @@ function App() {
 
     try {
       await phoneItiRef.current?.promise;
-      const internationalNumber = phoneItiRef.current?.getNumber() || phoneInputRef.current?.value || phoneNumber;
+      const internationalNumber = phoneItiRef.current?.getNumber() || '';
       if (!internationalNumber.trim()) {
         throw new Error('Введите номер телефона');
       }
@@ -284,9 +276,7 @@ function App() {
                   type="tel"
                   id="phone"
                   autoComplete="tel"
-                  placeholder="+1 702 123 4567"
-                  value={phoneNumber}
-                  onChange={(event) => setPhoneNumber(event.target.value)}
+                  inputMode="tel"
                   required
                 />
               </div>
