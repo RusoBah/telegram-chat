@@ -15,3 +15,18 @@ test('shows incoming replies from the selected chat in chronological order', () 
     { id: 'reply', text: 'Ответ', timestamp: 12 },
   ]);
 });
+
+test('keeps only the ten most recent incoming messages', () => {
+  const history = Array.from({ length: 12 }, (_, index) => ({
+    type: 'incoming',
+    chatId: '42',
+    idMessage: String(index),
+    timestamp: index,
+    textMessage: `Ответ ${index}`,
+  }));
+
+  const messages = getIncomingMessages(history.reverse(), '42');
+  assert.equal(messages.length, 10);
+  assert.equal(messages[0].id, '2');
+  assert.equal(messages[9].id, '11');
+});

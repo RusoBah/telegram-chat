@@ -21,5 +21,6 @@ export function getIncomingMessages(history, chatId) {
           : messageLabels[entry.typeMessage] ?? 'Получено сообщение',
       timestamp: Number.isInteger(entry.timestamp) ? entry.timestamp : 0,
     }))
-    .sort((first, second) => first.timestamp - second.timestamp);
+    .sort((first, second) => first.timestamp - second.timestamp)
+    .slice(-10);
 }

@@ -311,69 +311,72 @@ function App() {
   return (
     <main className="page">
       <div className="workspace-layout">
-      <div className="app-card">
-        <header className="card-header">
-          <span className="eyebrow">Telegram Chat</span>
-          <h1>Подключите ваш чат</h1>
-          <p>Укажите данные инстанса, чтобы начать переписку.</p>
-        </header>
-
-        <form className="app-form" onSubmit={checkConnection}>
-          <div className="field">
-            <label htmlFor="api-url">API URL</label>
-            <input
-              id="api-url"
-              type="url"
-              name="apiUrl"
-              placeholder="https://4100.api.green-api.com"
-              value={form.apiUrl}
-              onChange={updateField}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="instance-id">ID инстанса</label>
-            <input
-              id="instance-id"
-              name="idInstance"
-              placeholder="Введите ID инстанса"
-              value={form.idInstance}
-              onChange={updateField}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="instance-token">Токен инстанса</label>
-            <div className="input-with-action">
-              <input
-                id="instance-token"
-                name="apiTokenInstance"
-                type={showToken ? 'text' : 'password'}
-                placeholder="Введите токен инстанса"
-                value={form.apiTokenInstance}
-                onChange={updateField}
-                required
-              />
-              <button
-                className="input-action"
-                type="button"
-                onClick={() => setShowToken((current) => !current)}
-                aria-label={showToken ? 'Скрыть токен' : 'Показать токен'}
-                aria-pressed={showToken}
-              >
-                {showToken ? 'Скрыть' : 'Показать'}
-              </button>
+        <div className="setup-column">
+          <section className="app-card connection-card" aria-labelledby="connection-title">
+            <div className="section-heading">
+              <span className="step-number">01</span>
+              <div>
+                <h1 id="connection-title">Подключение</h1>
+                <p>Данные инстанса GREEN-API</p>
+              </div>
             </div>
-          </div>
-          <button className="primary-button" type="submit" disabled={isLoading}>
-            {isLoading ? 'Проверяем...' : 'Проверить подключение'}
-          </button>
-        </form>
 
-        {status && <p className="feedback" role="status">{status}</p>}
+            <form className="app-form" onSubmit={checkConnection}>
+              <div className="field">
+                <label htmlFor="api-url">API URL</label>
+                <input
+                  id="api-url"
+                  type="url"
+                  name="apiUrl"
+                  placeholder="https://4100.api.green-api.com"
+                  value={form.apiUrl}
+                  onChange={updateField}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="instance-id">ID инстанса</label>
+                <input
+                  id="instance-id"
+                  name="idInstance"
+                  placeholder="Введите ID инстанса"
+                  value={form.idInstance}
+                  onChange={updateField}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="instance-token">Токен инстанса</label>
+                <div className="input-with-action">
+                  <input
+                    id="instance-token"
+                    name="apiTokenInstance"
+                    type={showToken ? 'text' : 'password'}
+                    placeholder="Введите токен инстанса"
+                    value={form.apiTokenInstance}
+                    onChange={updateField}
+                    required
+                  />
+                  <button
+                    className="input-action"
+                    type="button"
+                    onClick={() => setShowToken((current) => !current)}
+                    aria-label={showToken ? 'Скрыть токен' : 'Показать токен'}
+                    aria-pressed={showToken}
+                  >
+                    {showToken ? 'Скрыть' : 'Показать'}
+                  </button>
+                </div>
+              </div>
+              <button className="primary-button" type="submit" disabled={isLoading}>
+                {isLoading ? 'Проверяем...' : 'Проверить подключение'}
+              </button>
+            </form>
 
-        {isConnected && (
-          <section className="next-section" aria-labelledby="recipient-title">
+            {status && <p className="feedback" role="status">{status}</p>}
+          </section>
+
+          <section className="app-card recipient-card" aria-labelledby="recipient-title">
             <div className="section-heading">
               <span className="step-number">02</span>
               <div>
@@ -381,114 +384,121 @@ function App() {
                 <p>Введите номер в международном формате.</p>
               </div>
             </div>
-            <form className="app-form" onSubmit={findRecipient}>
-              <div className="field">
-                <label htmlFor="phone">Номер телефона</label>
-                <input
-                  ref={phoneInputRef}
-                  type="tel"
-                  id="phone"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  required
-                />
-              </div>
-              <button className="primary-button" type="submit">Найти получателя</button>
-            </form>
-            {recipientStatus && <p className="feedback" role="status">{recipientStatus}</p>}
-            {chatId && <p className="chat-id">Идентификатор чата: {chatId}</p>}
+            {isConnected ? (
+              <>
+                <form className="app-form" onSubmit={findRecipient}>
+                  <div className="field">
+                    <label htmlFor="phone">Номер телефона</label>
+                    <input
+                      ref={phoneInputRef}
+                      type="tel"
+                      id="phone"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      required
+                    />
+                  </div>
+                  <button className="primary-button" type="submit">Найти получателя</button>
+                </form>
+                {recipientStatus && <p className="feedback" role="status">{recipientStatus}</p>}
+                {chatId && <p className="chat-id">Идентификатор чата: {chatId}</p>}
+              </>
+            ) : <p className="step-placeholder">Сначала проверьте подключение.</p>}
           </section>
-        )}
+        </div>
 
-        {chatId && (
-          <section className="next-section" aria-labelledby="responses-title">
-            <div className="section-heading">
-              <span className="step-number">03</span>
-              <div>
-                <h2 id="responses-title">Ответы получателя</h2>
-                <p>Проверьте новые сообщения в найденном чате.</p>
-              </div>
+        <section className="app-card responses-card" aria-labelledby="responses-title">
+          <div className="section-heading">
+            <span className="step-number">03</span>
+            <div>
+              <h2 id="responses-title">Ответы получателя</h2>
+              <p>До 10 последних входящих сообщений.</p>
             </div>
-            <button className="primary-button" type="button" onClick={receiveMessage} disabled={isReceiving}>
-              {isReceiving ? 'Проверяем...' : 'Проверить ответы'}
-            </button>
-            {receiveStatus && <p className="feedback" role="status">{receiveStatus}</p>}
-            {incomingMessages.length > 0 && (
-              <ul className="incoming-messages">
-                {incomingMessages.map((message) => (
-                  <li key={message.id}>{message.text}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-        {chatId && (
-          <section className="next-section" aria-labelledby="message-title">
-            <div className="section-heading">
-              <span className="step-number">04</span>
-              <div>
-                <h2 id="message-title">Новое сообщение</h2>
-                <p>Напишите текст для найденного получателя.</p>
-              </div>
-            </div>
-            <form className="app-form" onSubmit={sendMessage}>
-              <div className="field">
-                <label htmlFor="message">Сообщение</label>
-                <textarea
-                  id="message"
-                  placeholder="Введите сообщение..."
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  maxLength={4096}
-                  required
-                />
-              </div>
-              <button className="primary-button" type="submit" disabled={isSending}>
-                {isSending ? 'Отправляем...' : 'Отправить сообщение'}
+          </div>
+          {chatId ? (
+            <>
+              <button className="primary-button" type="button" onClick={receiveMessage} disabled={isReceiving}>
+                {isReceiving ? 'Проверяем...' : 'Проверить ответы'}
               </button>
-            </form>
-            {sendStatus && <p className="feedback" role="status">{sendStatus}</p>}
-          </section>
-        )}
-      </div>
-      <aside className="history-card" aria-labelledby="history-title">
-        <span className="eyebrow">История</span>
-        <h2 id="history-title">Последние чаты</h2>
-        <p className="history-description">До 10 найденных чатов этого инстанса. Статус обновляется после проверки ответов.</p>
-        {chatHistory.length > 0 ? (
-          <ul className="history-list">
-            {chatHistory.map((chat) => (
-              <li className="history-row" key={chat.chatId}>
-                <button
-                  className="history-item"
-                  type="button"
-                  onClick={() => selectChat(chat.chatId)}
-                  aria-pressed={chatId === chat.chatId}
-                >
-                  <span className="history-name">{chat.name || 'Имя недоступно'}</span>
-                  <span className="history-detail">ID: {chat.chatId}</span>
-                  <span className="history-detail">Номер: {chat.phoneNumber ? `+${chat.phoneNumber.replace(/^\+/, '')}` : 'скрыт'}</span>
-                  <span className={chat.hasReply ? 'reply-status reply-status--received' : 'reply-status'}>
-                    {chat.hasReply ? 'Ответ получен' : chat.lastSentAt ? 'Ожидаем ответ' : 'Сообщение не отправлялось'}
-                  </span>
+              {receiveStatus && <p className="feedback" role="status">{receiveStatus}</p>}
+              {incomingMessages.length > 0 && (
+                <ul className="incoming-messages">
+                  {incomingMessages.map((message) => (
+                    <li key={message.id}>{message.text}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : <p className="step-placeholder">Выберите найденный чат.</p>}
+        </section>
+        <section className="app-card message-card" aria-labelledby="message-title">
+          <div className="section-heading">
+            <span className="step-number">04</span>
+            <div>
+              <h2 id="message-title">Новое сообщение</h2>
+              <p>Напишите текст для найденного получателя.</p>
+            </div>
+          </div>
+          {chatId ? (
+            <>
+              <form className="app-form" onSubmit={sendMessage}>
+                <div className="field">
+                  <label htmlFor="message">Сообщение</label>
+                  <textarea
+                    id="message"
+                    placeholder="Введите сообщение..."
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    maxLength={4096}
+                    required
+                  />
+                </div>
+                <button className="primary-button" type="submit" disabled={isSending}>
+                  {isSending ? 'Отправляем...' : 'Отправить сообщение'}
                 </button>
-                <button
-                  className="history-remove"
-                  type="button"
-                  onClick={() => removeChatFromHistory(chat.chatId)}
-                  aria-label={`Убрать чат ${chat.name || chat.chatId} из истории`}
-                >
-                  Убрать
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="history-empty">
-            {isConnected ? 'Найдите получателя, чтобы добавить его в историю.' : 'Подключите инстанс, чтобы увидеть историю.'}
-          </p>
-        )}
-      </aside>
+              </form>
+              {sendStatus && <p className="feedback" role="status">{sendStatus}</p>}
+            </>
+          ) : <p className="step-placeholder">Выберите найденный чат.</p>}
+        </section>
+        <aside className="history-card" aria-labelledby="history-title">
+          <span className="eyebrow">История</span>
+          <h2 id="history-title">Последние чаты</h2>
+          <p className="history-description">До 10 найденных чатов этого инстанса. Статус обновляется после проверки ответов.</p>
+          {chatHistory.length > 0 ? (
+            <ul className="history-list">
+              {chatHistory.map((chat) => (
+                <li className="history-row" key={chat.chatId}>
+                  <button
+                    className="history-item"
+                    type="button"
+                    onClick={() => selectChat(chat.chatId)}
+                    aria-pressed={chatId === chat.chatId}
+                  >
+                    <span className="history-name">{chat.name || 'Имя недоступно'}</span>
+                    <span className="history-detail">ID: {chat.chatId}</span>
+                    <span className="history-detail">Номер: {chat.phoneNumber ? `+${chat.phoneNumber.replace(/^\+/, '')}` : 'скрыт'}</span>
+                    <span className={chat.hasReply ? 'reply-status reply-status--received' : 'reply-status'}>
+                      {chat.hasReply ? 'Ответ получен' : chat.lastSentAt ? 'Ожидаем ответ' : 'Сообщение не отправлялось'}
+                    </span>
+                  </button>
+                  <button
+                    className="history-remove"
+                    type="button"
+                    onClick={() => removeChatFromHistory(chat.chatId)}
+                    aria-label={`Убрать чат ${chat.name || chat.chatId} из истории`}
+                  >
+                    Убрать
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="history-empty">
+              {isConnected ? 'Найдите получателя, чтобы добавить его в историю.' : 'Подключите инстанс, чтобы увидеть историю.'}
+            </p>
+          )}
+        </aside>
       </div>
     </main>
   );
