@@ -144,6 +144,49 @@ app.post('/api/connection/check', async (req, res) => {
   }
 });
 
+/**
+ * Передаёт текстовое сообщение в очередь отправки GREEN-API.
+ *
+ * POST /api/messages/send
+ * Тело: параметры подключения, chatId и message.
+ */
+app.post('/api/messages/send', async (req, res) => {
+  const connection = parseConnection(req.body);
+  const { chatId, message } = req.body ?? {};
+
+  if (!connection) {
+    return res.status(400).json({ error: 'Проверьте параметры подключения' });
+  }
+
+  if (typeof chatId !== 'string' || !/^\d+$/.test(chatId)) {
+    return res.status(400).json({ error: 'Некорректный идентификатор чата' });
+  }
+
+  if (
+    typeof message !== 'string' ||
+    !message.trim() ||
+    message.length > 4096
+  ) {
+    return res.status(400).json({
+      error: 'Введите сообщение длиной до 4096 символов',
+    });
+  }
+
+  try {
+    const data = await callGreenApi(connection, 'sendMessage', {
+      chatId,
+      message: message.trim(),
+    });
+
+    if (typeof data.idMessage !== 'string') {
+      return res.status(502).json({ error: 'Неожиданный ответ GREEN-API' });
+    }
+
+    return res.json({ idMessage: data.idMessage });
+  } catch (error) {
+    return sendApiError(res, error);
+  }
+});
 
 /**
  * Ищет Telegram-аккаунт получателя по номеру телефона.

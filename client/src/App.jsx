@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import intlTelInput from 'intl-tel-input';
+import 'intl-tel-input/styles';
 
 const stateLabels = {
   authorized: 'Инстанс подключён и авторизован',
@@ -27,6 +29,33 @@ function App() {
 
   /** Номер получателя, введённый пользователем. */
   const [phoneNumber, setPhoneNumber] = useState('');
+  const phoneInputRef = useRef(null);
+  const phoneItiRef = useRef(null);
+
+  useEffect(() => {
+    const input = phoneInputRef.current;
+    if (!input) return undefined;
+
+    const initialCountryLookup = async () => {
+      const response = await fetch('https://ipapi.co/json');
+      if (!response.ok) throw new Error('Не удалось определить страну по IP');
+      const data = await response.json();
+      return data.country_code;
+    };
+
+    const iti = intlTelInput(input, {
+      initialCountryLookup,
+      countrySearch: false,
+      matchDropdownWidth: false,
+      loadUtils: () => import('intl-tel-input/utils'),
+    });
+    phoneItiRef.current = iti;
+
+    return () => {
+      iti.destroy();
+      phoneItiRef.current = null;
+    };
+  }, [isConnected]);
 
   /** Текст результата поиска получателя. */
   const [recipientStatus, setRecipientStatus] = useState('');
@@ -95,10 +124,19 @@ function App() {
     setRecipientStatus('Ищем получателя...');
 
     try {
+      await phoneItiRef.current?.promise;
+      const internationalNumber = phoneItiRef.current?.getNumber() || phoneInputRef.current?.value || phoneNumber;
+      if (!internationalNumber.trim()) {
+        throw new Error('Введите номер телефона');
+      }
+
       const response = await fetch('/api/recipient/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, phoneNumber }),
+        body: JSON.stringify({
+          ...form,
+          phoneNumber: internationalNumber,
+        }),
       });
 
       const data = await response.json();
@@ -177,8 +215,11 @@ function App() {
             <label>
               Телефон в международном формате
               <input
+                ref={phoneInputRef}
                 type="tel"
-                placeholder="+79991234567"
+                id="phone"
+                autoComplete="tel"
+                placeholder="+1 702 123 4567"
                 value={phoneNumber}
                 onChange={(event) => setPhoneNumber(event.target.value)}
                 required
