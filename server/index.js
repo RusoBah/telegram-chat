@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getIncomingMessages } from './incoming-messages.js';
 
 const app = express();
@@ -298,6 +300,25 @@ app.post('/api/messages/receive', async (req, res) => {
   }
 });
 
-app.listen(3001, () => {
-  console.log('API запущен: http://localhost:3001');
+/**
+ * Раздаёт собранный React-клиент после обработки маршрутов API.
+ * Для неизвестных путей приложения возвращает index.html.
+ */
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(serverDir, '../client/dist');
+
+app.use(express.static(clientDist));
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api/')) {
+    return next();
+  }
+
+  return res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+const port = process.env.PORT || 3001;
+
+app.listen(port, () => {
+  console.log(`Сервер запущен на порту ${port}`);
 });
