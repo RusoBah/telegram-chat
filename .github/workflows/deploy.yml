@@ -1,0 +1,68 @@
+name: Deploy to Beget
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beget-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+
+      - name: Установить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Собрать приложение
+        run: |
+          npm ci --prefix server --omit=dev
+          npm ci --prefix client
+          npm run build --prefix client
+
+      - name: Настроить SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.BEGET_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.BEGET_KNOWN_HOSTS }}
+        run: |
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/beget_deploy
+          chmod 600 ~/.ssh/beget_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Обновить файлы и перезапустить Passenger
+        env:
+          BEGET_HOST: ${{ secrets.BEGET_HOST }}
+          BEGET_USER: ${{ secrets.BEGET_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$BEGET_HOST"
+          test -n "$BEGET_USER"
+          SSH=(ssh -i ~/.ssh/beget_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15)
+          TARGET="$BEGET_USER@$BEGET_HOST"
+          APP_DIR=/home/d/devolon9/devolon9.beget.tech/app
+
+          "${SSH[@]}" "$TARGET" "cd '$APP_DIR' && git pull --ff-only origin main && mkdir -p tmp"
+          tar -czf - server/node_modules client/dist |
+            "${SSH[@]}" "$TARGET" "cd '$APP_DIR' && tar -xzf - && touch tmp/restart.txt"
+
+      - name: Проверить сайт
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 http://devolon9.beget.tech/api/health
