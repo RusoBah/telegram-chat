@@ -60,7 +60,10 @@ jobs:
           TARGET="$BEGET_USER@$BEGET_HOST"
           APP_DIR=/home/d/devolon9/devolon9.beget.tech/app
 
-          "${SSH[@]}" "$TARGET" "cd '$APP_DIR' && git pull --ff-only origin main && mkdir -p tmp"
+          # Beget изменил права файлов при переносе; содержимое server/index.js
+          # на сервере уже совпадает с origin/main. Убираем локальную правку
+          # только после сравнения, чтобы не потерять новые изменения.
+          "${SSH[@]}" "$TARGET" "cd '$APP_DIR' && git config core.fileMode false && git fetch origin main && if git diff --quiet origin/main -- server/index.js; then git restore -- server/index.js; fi && git pull --ff-only origin main && mkdir -p tmp"
           tar -czf - server/node_modules client/dist |
             "${SSH[@]}" "$TARGET" "cd '$APP_DIR' && tar -xzf - && touch tmp/restart.txt"
 
